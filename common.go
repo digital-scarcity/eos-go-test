@@ -3,6 +3,7 @@ package eostest
 import (
 	"context"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"log"
 	"math/rand"
@@ -77,6 +78,9 @@ func ExecTrx(ctx context.Context, api *eos.API, actions []*eos.Action) (string, 
 	}
 
 	tx := eos.NewTransaction(actions, txOpts)
+	myJSON, err := json.MarshalIndent(tx, "", "  ")
+	log.Println(myJSON)
+
 	_, packedTx, err := api.SignTransaction(ctx, tx, txOpts.ChainID, eos.CompressionNone)
 	if err != nil {
 		log.Printf("Error signing transaction: %s", err)
