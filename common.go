@@ -53,6 +53,11 @@ func toActionName(in, field string) eos.ActionName {
 	return eos.ActionName(toName(in, field))
 }
 
+// DefaultKey returns the default EOSIO key
+func DefaultKey() string {
+	return "5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3"
+}
+
 // ErrorCheck - too generic - need to improve this
 // TODO: fix
 func ErrorCheck(prefix string, err error) {
