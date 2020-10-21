@@ -93,12 +93,12 @@ func ExecTrx(ctx context.Context, api *eos.API, actions []*eos.Action) (string, 
 }
 
 // CreateRandoms returns a list of accounts with eosio.code permission attached to active
-func CreateRandoms(ctx context.Context, api *eos.API, length int) ([]*eos.AccountName, error) {
+func CreateRandoms(ctx context.Context, api *eos.API, length int) ([]eos.AccountName, error) {
 
 	i := 0
 	var actions []*eos.Action
-	var accounts []*eos.AccountName
-	accounts = make([]*eos.AccountName, length)
+	var accounts []eos.AccountName
+	accounts = make([]eos.AccountName, length)
 	keyBag := api.Signer
 
 	var codePermissionActions []*eos.Action
@@ -113,10 +113,10 @@ func CreateRandoms(ctx context.Context, api *eos.API, length int) ([]*eos.Accoun
 			log.Panicf("import private key: %s", err)
 		}
 
-		accounts[i] = &acct
+		accounts[i] = acct
 		actions = append(actions, system.NewNewAccount(creator, acct, key.PublicKey()))
 
-		codePermissionActions[i] = system.NewUpdateAuth(*accounts[i],
+		codePermissionActions[i] = system.NewUpdateAuth(accounts[i],
 			"active",
 			"owner",
 			eos.Authority{
@@ -175,7 +175,7 @@ type tokenCreate struct {
 }
 
 // DeployAndCreateToken deploys the standard token contract and creates the specified token max supply
-func DeployAndCreateToken(ctx context.Context, api *eos.API, contract *eos.AccountName, issuer *eos.AccountName, maxSupply *eos.Asset) {
+func DeployAndCreateToken(ctx context.Context, api *eos.API, contract *eos.AccountName, issuer *eos.AccountName, maxSupply *eos.Asset) (string, error) {
 
 	trxID, err := SetContract(ctx, api, contract, "contracts/token.wasm", "contracts/token.abi")
 	if err != nil {
@@ -194,7 +194,7 @@ func DeployAndCreateToken(ctx context.Context, api *eos.API, contract *eos.Accou
 				MaxSupply: *maxSupply,
 			}),
 		}}
-	ExecTrx(ctx, api, actions)
 
 	log.Println("Created Token : ", *contract, " : ", maxSupply, " : ", trxID)
+	return ExecTrx(ctx, api, actions)
 }
