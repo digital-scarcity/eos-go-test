@@ -49,7 +49,8 @@ func toName(in, field string) eos.Name {
 	return name
 }
 
-func toActionName(in, field string) eos.ActionName {
+// ToActionName is needed for invoking actions
+func ToActionName(in, field string) eos.ActionName {
 	return eos.ActionName(toName(in, field))
 }
 
@@ -184,7 +185,7 @@ func DeployAndCreateToken(ctx context.Context, api *eos.API, contract *eos.Accou
 	actions := []*eos.Action{
 		{
 			Account: *contract,
-			Name:    toActionName("create", "create new token"),
+			Name:    ToActionName("create", "create new token"),
 			Authorization: []eos.PermissionLevel{
 				{Actor: *contract, Permission: eos.PN("active")},
 			},
