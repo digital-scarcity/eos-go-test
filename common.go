@@ -176,9 +176,11 @@ type tokenCreate struct {
 }
 
 // DeployAndCreateToken deploys the standard token contract and creates the specified token max supply
-func DeployAndCreateToken(ctx context.Context, api *eos.API, contract *eos.AccountName, issuer *eos.AccountName, maxSupply *eos.Asset) (string, error) {
+func DeployAndCreateToken(ctx context.Context, api *eos.API, tokenHome string,
+	contract *eos.AccountName, issuer *eos.AccountName, maxSupply *eos.Asset) (string, error) {
 
-	trxID, err := SetContract(ctx, api, contract, "contracts/token.wasm", "contracts/token.abi")
+	// TODO: how to save wasm and abi to distribute with package
+	trxID, err := SetContract(ctx, api, contract, tokenHome+"/token/token.wasm", tokenHome+"/token/token.abi")
 	if err != nil {
 		log.Panicf("cannot set contract: %s", err)
 	}
