@@ -252,7 +252,7 @@ func DeployAndCreateToken(ctx context.Context, api *eos.API, tokenHome string,
 				{Actor: *contract, Permission: eos.PN("active")},
 			},
 			ActionData: eos.NewActionData(tokenCreate{
-				Issuer:    *contract,
+				Issuer:    *issuer,
 				MaxSupply: *maxSupply,
 			}),
 		}}
