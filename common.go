@@ -93,29 +93,26 @@ func ExecTrx(ctx context.Context, api *eos.API, actions []*eos.Action) (string, 
 	return trxID, nil
 }
 
-// CreateAccount creates a specific account passed to the function
-func CreateAccount(ctx context.Context, api *eos.API, acct eos.AccountName) (eos.AccountName, error) {
-	i := 0
-	var actions []*eos.Action
-	// var accounts []eos.AccountName
-	// accounts = make([]eos.AccountName, length)
+// CreateAccountFromString creates an specific account from a string name
+func CreateAccountFromString(ctx context.Context, api *eos.API, accountName string) (eos.AccountName, error) {
 	keyBag := api.Signer
-
-	var codePermissionActions []*eos.Action
-	codePermissionActions = make([]*eos.Action, 1)
-
-	// acct := toAccount("eosio.token", "eosio.token")
 	key, _ := ecc.NewRandomPrivateKey()
+
+	acct := toAccount(accountName, "account to create")
 
 	err := keyBag.ImportPrivateKey(ctx, key.String())
 	if err != nil {
 		log.Panicf("import private key: %s", err)
 	}
 
-	// accounts[i] = acct
-	actions[0] = system.NewNewAccount(creator, acct, key.PublicKey())
+	actions := []*eos.Action{system.NewNewAccount(creator, acct, key.PublicKey())}
+	_, err = ExecTrx(ctx, api, actions)
+	if err != nil {
+		log.Panicf("cannot create random accounts: %s", err)
+		return acct, err
+	}
 
-	codePermissionActions[i] = system.NewUpdateAuth(acct,
+	codePermissionActions := []*eos.Action{system.NewUpdateAuth(acct,
 		"active",
 		"owner",
 		eos.Authority{
@@ -132,94 +129,93 @@ func CreateAccount(ctx context.Context, api *eos.API, acct eos.AccountName) (eos
 				Weight: 1,
 			}},
 			Waits: []eos.WaitWeight{},
-		}, "owner")
+		}, "owner")}
 
-	log.Println("Creating account: 	", acct, " with private key : ", key.String())
-	i++
-
-	trxID, err := ExecTrx(ctx, api, actions)
+	_, err = ExecTrx(ctx, api, codePermissionActions)
 	if err != nil {
 		log.Panicf("cannot create random accounts: %s", err)
 		return acct, err
 	}
-	log.Println("Created random accounts: ", trxID)
-
-	for _, codePermissionAction := range codePermissionActions {
-		trxID, err = ExecTrx(ctx, api, []*eos.Action{codePermissionAction})
-		if err != nil {
-			log.Panicf("cannot add eosio.code permission: %s", err)
-			return acct, err
-		}
-		log.Println("Added eosio.code permission: ", trxID)
-	}
-
 	return acct, nil
 }
 
 // CreateRandoms returns a list of accounts with eosio.code permission attached to active
 func CreateRandoms(ctx context.Context, api *eos.API, length int) ([]eos.AccountName, error) {
 
+	accounts := make([]eos.AccountName, length)
 	i := 0
-	var actions []*eos.Action
-	var accounts []eos.AccountName
-	accounts = make([]eos.AccountName, length)
-	keyBag := api.Signer
-
-	var codePermissionActions []*eos.Action
-	codePermissionActions = make([]*eos.Action, length)
-
 	for i < length {
-		acct := toAccount(randAccountName(), "random account name")
-		key, _ := ecc.NewRandomPrivateKey()
-
-		err := keyBag.ImportPrivateKey(ctx, key.String())
+		account, err := CreateAccountFromString(ctx, api, randAccountName())
 		if err != nil {
-			log.Panicf("import private key: %s", err)
-		}
-
-		accounts[i] = acct
-		actions = append(actions, system.NewNewAccount(creator, acct, key.PublicKey()))
-
-		codePermissionActions[i] = system.NewUpdateAuth(accounts[i],
-			"active",
-			"owner",
-			eos.Authority{
-				Threshold: 1,
-				Keys: []eos.KeyWeight{{
-					PublicKey: key.PublicKey(),
-					Weight:    1,
-				}},
-				Accounts: []eos.PermissionLevelWeight{{
-					Permission: eos.PermissionLevel{
-						Actor:      acct,
-						Permission: "eosio.code",
-					},
-					Weight: 1,
-				}},
-				Waits: []eos.WaitWeight{},
-			}, "owner")
-
-		log.Println("Creating account: 	", acct, " with private key : ", key.String())
-		i++
-	}
-
-	trxID, err := ExecTrx(ctx, api, actions)
-	if err != nil {
-		log.Panicf("cannot create random accounts: %s", err)
-		return nil, err
-	}
-	log.Println("Created random accounts: ", trxID)
-
-	for _, codePermissionAction := range codePermissionActions {
-		trxID, err = ExecTrx(ctx, api, []*eos.Action{codePermissionAction})
-		if err != nil {
-			log.Panicf("cannot add eosio.code permission: %s", err)
+			log.Panicf("cannot create account: %s", err)
 			return nil, err
 		}
-		log.Println("Added eosio.code permission: ", trxID)
+		accounts[i] = account
+		i++
 	}
-
 	return accounts, nil
+
+	// i := 0
+	// var actions []*eos.Action
+	// var accounts []eos.AccountName
+	// accounts = make([]eos.AccountName, length)
+	// keyBag := api.Signer
+
+	// var codePermissionActions []*eos.Action
+	// codePermissionActions = make([]*eos.Action, length)
+
+	// for i < length {
+	// 	acct := toAccount(randAccountName(), "random account name")
+	// 	key, _ := ecc.NewRandomPrivateKey()
+
+	// 	err := keyBag.ImportPrivateKey(ctx, key.String())
+	// 	if err != nil {
+	// 		log.Panicf("import private key: %s", err)
+	// 	}
+
+	// 	accounts[i] = acct
+	// 	actions = append(actions, system.NewNewAccount(creator, acct, key.PublicKey()))
+
+	// 	codePermissionActions[i] = system.NewUpdateAuth(accounts[i],
+	// 		"active",
+	// 		"owner",
+	// 		eos.Authority{
+	// 			Threshold: 1,
+	// 			Keys: []eos.KeyWeight{{
+	// 				PublicKey: key.PublicKey(),
+	// 				Weight:    1,
+	// 			}},
+	// 			Accounts: []eos.PermissionLevelWeight{{
+	// 				Permission: eos.PermissionLevel{
+	// 					Actor:      acct,
+	// 					Permission: "eosio.code",
+	// 				},
+	// 				Weight: 1,
+	// 			}},
+	// 			Waits: []eos.WaitWeight{},
+	// 		}, "owner")
+
+	// 	log.Println("Creating account: 	", acct, " with private key : ", key.String())
+	// 	i++
+	// }
+
+	// trxID, err := ExecTrx(ctx, api, actions)
+	// if err != nil {
+	// 	log.Panicf("cannot create random accounts: %s", err)
+	// 	return nil, err
+	// }
+	// log.Println("Created random accounts: ", trxID)
+
+	// for _, codePermissionAction := range codePermissionActions {
+	// 	trxID, err = ExecTrx(ctx, api, []*eos.Action{codePermissionAction})
+	// 	if err != nil {
+	// 		log.Panicf("cannot add eosio.code permission: %s", err)
+	// 		return nil, err
+	// 	}
+	// 	log.Println("Added eosio.code permission: ", trxID)
+	// }
+
+	// return accounts, nil
 }
 
 // SetContract sets the wasm and abi files to the account
