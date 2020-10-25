@@ -93,6 +93,69 @@ func ExecTrx(ctx context.Context, api *eos.API, actions []*eos.Action) (string, 
 	return trxID, nil
 }
 
+// CreateAccount creates a specific account passed to the function
+func CreateAccount(ctx context.Context, api *eos.API, acct eos.AccountName) (eos.AccountName, error) {
+	i := 0
+	var actions []*eos.Action
+	// var accounts []eos.AccountName
+	// accounts = make([]eos.AccountName, length)
+	keyBag := api.Signer
+
+	var codePermissionActions []*eos.Action
+	codePermissionActions = make([]*eos.Action, 1)
+
+	// acct := toAccount("eosio.token", "eosio.token")
+	key, _ := ecc.NewRandomPrivateKey()
+
+	err := keyBag.ImportPrivateKey(ctx, key.String())
+	if err != nil {
+		log.Panicf("import private key: %s", err)
+	}
+
+	// accounts[i] = acct
+	actions[0] = system.NewNewAccount(creator, acct, key.PublicKey())
+
+	codePermissionActions[i] = system.NewUpdateAuth(acct,
+		"active",
+		"owner",
+		eos.Authority{
+			Threshold: 1,
+			Keys: []eos.KeyWeight{{
+				PublicKey: key.PublicKey(),
+				Weight:    1,
+			}},
+			Accounts: []eos.PermissionLevelWeight{{
+				Permission: eos.PermissionLevel{
+					Actor:      acct,
+					Permission: "eosio.code",
+				},
+				Weight: 1,
+			}},
+			Waits: []eos.WaitWeight{},
+		}, "owner")
+
+	log.Println("Creating account: 	", acct, " with private key : ", key.String())
+	i++
+
+	trxID, err := ExecTrx(ctx, api, actions)
+	if err != nil {
+		log.Panicf("cannot create random accounts: %s", err)
+		return acct, err
+	}
+	log.Println("Created random accounts: ", trxID)
+
+	for _, codePermissionAction := range codePermissionActions {
+		trxID, err = ExecTrx(ctx, api, []*eos.Action{codePermissionAction})
+		if err != nil {
+			log.Panicf("cannot add eosio.code permission: %s", err)
+			return acct, err
+		}
+		log.Println("Added eosio.code permission: ", trxID)
+	}
+
+	return acct, nil
+}
+
 // CreateRandoms returns a list of accounts with eosio.code permission attached to active
 func CreateRandoms(ctx context.Context, api *eos.API, length int) ([]eos.AccountName, error) {
 
