@@ -7,6 +7,7 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"testing"
 	"time"
 
 	"github.com/eoscanada/eos-go"
@@ -38,20 +39,6 @@ func toAccount(in, field string) eos.AccountName {
 	ErrorCheck(fmt.Sprintf("invalid account format for %q", field), err)
 
 	return acct
-}
-
-func toName(in, field string) eos.Name {
-	name, err := cli.ToName(in)
-	if err != nil {
-		ErrorCheck(fmt.Sprintf("invalid name format for %q", field), err)
-	}
-
-	return name
-}
-
-// ToActionName is needed for invoking actions
-func ToActionName(in, field string) eos.ActionName {
-	return eos.ActionName(toName(in, field))
 }
 
 // DefaultKey returns the default EOSIO key
@@ -154,76 +141,14 @@ func CreateRandoms(ctx context.Context, api *eos.API, length int) ([]eos.Account
 		i++
 	}
 	return accounts, nil
-
-	// i := 0
-	// var actions []*eos.Action
-	// var accounts []eos.AccountName
-	// accounts = make([]eos.AccountName, length)
-	// keyBag := api.Signer
-
-	// var codePermissionActions []*eos.Action
-	// codePermissionActions = make([]*eos.Action, length)
-
-	// for i < length {
-	// 	acct := toAccount(randAccountName(), "random account name")
-	// 	key, _ := ecc.NewRandomPrivateKey()
-
-	// 	err := keyBag.ImportPrivateKey(ctx, key.String())
-	// 	if err != nil {
-	// 		log.Panicf("import private key: %s", err)
-	// 	}
-
-	// 	accounts[i] = acct
-	// 	actions = append(actions, system.NewNewAccount(creator, acct, key.PublicKey()))
-
-	// 	codePermissionActions[i] = system.NewUpdateAuth(accounts[i],
-	// 		"active",
-	// 		"owner",
-	// 		eos.Authority{
-	// 			Threshold: 1,
-	// 			Keys: []eos.KeyWeight{{
-	// 				PublicKey: key.PublicKey(),
-	// 				Weight:    1,
-	// 			}},
-	// 			Accounts: []eos.PermissionLevelWeight{{
-	// 				Permission: eos.PermissionLevel{
-	// 					Actor:      acct,
-	// 					Permission: "eosio.code",
-	// 				},
-	// 				Weight: 1,
-	// 			}},
-	// 			Waits: []eos.WaitWeight{},
-	// 		}, "owner")
-
-	// 	log.Println("Creating account: 	", acct, " with private key : ", key.String())
-	// 	i++
-	// }
-
-	// trxID, err := ExecTrx(ctx, api, actions)
-	// if err != nil {
-	// 	log.Panicf("cannot create random accounts: %s", err)
-	// 	return nil, err
-	// }
-	// log.Println("Created random accounts: ", trxID)
-
-	// for _, codePermissionAction := range codePermissionActions {
-	// 	trxID, err = ExecTrx(ctx, api, []*eos.Action{codePermissionAction})
-	// 	if err != nil {
-	// 		log.Panicf("cannot add eosio.code permission: %s", err)
-	// 		return nil, err
-	// 	}
-	// 	log.Println("Added eosio.code permission: ", trxID)
-	// }
-
-	// return accounts, nil
 }
 
 // SetContract sets the wasm and abi files to the account
-func SetContract(ctx context.Context, api *eos.API, accountName *eos.AccountName, wasmFile, abiFile string) (string, error) {
-	setCodeAction, err := system.NewSetCode(*accountName, wasmFile)
+func SetContract(ctx context.Context, api *eos.API, accountName eos.AccountName, wasmFile, abiFile string) (string, error) {
+	setCodeAction, err := system.NewSetCode(accountName, wasmFile)
 	ErrorCheck("loading wasm file", err)
 
-	setAbiAction, err := system.NewSetABI(*accountName, abiFile)
+	setAbiAction, err := system.NewSetABI(accountName, abiFile)
 	ErrorCheck("loading abi file", err)
 
 	return ExecTrx(ctx, api, []*eos.Action{setCodeAction, setAbiAction})
@@ -235,28 +160,27 @@ type tokenCreate struct {
 }
 
 // DeployAndCreateToken deploys the standard token contract and creates the specified token max supply
-func DeployAndCreateToken(ctx context.Context, api *eos.API, tokenHome string,
-	contract *eos.AccountName, issuer *eos.AccountName, maxSupply *eos.Asset) (string, error) {
+func DeployAndCreateToken(ctx context.Context, t *testing.T, api *eos.API, tokenHome string,
+	contract, issuer eos.AccountName, maxSupply eos.Asset) (string, error) {
 
 	// TODO: how to save wasm and abi to distribute with package
-	trxID, err := SetContract(ctx, api, contract, tokenHome+"/token/token.wasm", tokenHome+"/token/token.abi")
+	_, err := SetContract(ctx, api, contract, tokenHome+"/token/token.wasm", tokenHome+"/token/token.abi")
 	if err != nil {
 		log.Panicf("cannot set contract: %s", err)
 	}
 
-	actions := []*eos.Action{
-		{
-			Account: *contract,
-			Name:    ToActionName("create", "create new token"),
-			Authorization: []eos.PermissionLevel{
-				{Actor: *contract, Permission: eos.PN("active")},
-			},
-			ActionData: eos.NewActionData(tokenCreate{
-				Issuer:    *issuer,
-				MaxSupply: *maxSupply,
-			}),
-		}}
+	actions := []*eos.Action{{
+		Account: contract,
+		Name:    eos.ActN("create"),
+		Authorization: []eos.PermissionLevel{
+			{Actor: contract, Permission: eos.PN("active")},
+		},
+		ActionData: eos.NewActionData(tokenCreate{
+			Issuer:    issuer,
+			MaxSupply: maxSupply,
+		}),
+	}}
 
-	log.Println("Created Token : ", *contract, " : ", maxSupply, " : ", trxID)
+	t.Log("Created Token : ", contract, " 		: ", maxSupply.String())
 	return ExecTrx(ctx, api, actions)
 }
