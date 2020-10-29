@@ -77,32 +77,14 @@ func ExecTrx(ctx context.Context, api *eos.API, actions []*eos.Action) (string, 
 	return trxID, nil
 }
 
-// CreateAccountFromString creates an specific account from a string name
-func CreateAccountFromString(ctx context.Context, api *eos.API, accountName, privateKey string) (eos.AccountName, error) {
-	keyBag := api.Signer
-
-	var key *ecc.PrivateKey
-	var err error
-	if privateKey == "" {
-		key, _ := ecc.NewRandomPrivateKey()
-		err = keyBag.ImportPrivateKey(ctx, key.String())
-	} else {
-		key, err = ecc.NewPrivateKey(privateKey)
-		if err != nil {
-			return "", fmt.Errorf("privateKey parameter is not a valid format: %s", err)
-		}
-		err = keyBag.ImportPrivateKey(ctx, privateKey)
-	}
-	if err != nil {
-		return "", fmt.Errorf("Error importing key: %s", err)
-	}
-
+// CreateAccount creates an account and sets the eosio.code permission on active
+func CreateAccount(ctx context.Context, api *eos.API, accountName string, publicKey ecc.PublicKey) (eos.AccountName, error) {
 	acct := toAccount(accountName, "account to create")
 
-	actions := []*eos.Action{system.NewNewAccount(creator, acct, key.PublicKey())}
-	_, err = ExecTrx(ctx, api, actions)
+	actions := []*eos.Action{system.NewNewAccount(creator, acct, publicKey)}
+	_, err := ExecTrx(ctx, api, actions)
 	if err != nil {
-		return "", fmt.Errorf("Error creating account: %s", err)
+		return eos.AccountName(""), fmt.Errorf("Error filling tx opts: %s", err)
 	}
 
 	codePermissionActions := []*eos.Action{system.NewUpdateAuth(acct,
@@ -111,7 +93,7 @@ func CreateAccountFromString(ctx context.Context, api *eos.API, accountName, pri
 		eos.Authority{
 			Threshold: 1,
 			Keys: []eos.KeyWeight{{
-				PublicKey: key.PublicKey(),
+				PublicKey: publicKey,
 				Weight:    1,
 			}},
 			Accounts: []eos.PermissionLevelWeight{{
@@ -126,9 +108,59 @@ func CreateAccountFromString(ctx context.Context, api *eos.API, accountName, pri
 
 	_, err = ExecTrx(ctx, api, codePermissionActions)
 	if err != nil {
-		return "", fmt.Errorf("Error pushing transaction: %s", err)
+		return "", fmt.Errorf("Error filling tx opts: %s", err)
 	}
 	return acct, nil
+}
+
+// CreateAccountWithRandomKey specifies a name and uses a random key to create account (adds to Keybag)
+func CreateAccountWithRandomKey(ctx context.Context, api *eos.API, accountName string) (eos.AccountName, error) {
+
+	key, _ := ecc.NewRandomPrivateKey()
+	err := api.Signer.ImportPrivateKey(ctx, key.String())
+	if err != nil {
+		return "", fmt.Errorf("Error importing key: %s", err)
+	}
+
+	return CreateAccount(ctx, api, accountName, key.PublicKey())
+}
+
+// CreateAccountWithRandomName ...
+func CreateAccountWithRandomName(ctx context.Context, api *eos.API, key ecc.PublicKey) (eos.AccountName, error) {
+	return CreateAccount(ctx, api, randAccountName(), key)
+}
+
+// CreateAccountFromString creates an specific account from a string name
+func CreateAccountFromString(ctx context.Context, api *eos.API, accountName, privateKey string) (eos.AccountName, error) {
+
+	key, err := ecc.NewPrivateKey(privateKey)
+	if err != nil {
+		return "", fmt.Errorf("privateKey parameter is not a valid format: %s", err)
+	}
+
+	err = api.Signer.ImportPrivateKey(ctx, privateKey)
+	if err != nil {
+		return "", fmt.Errorf("Error importing key: %s", err)
+	}
+
+	return CreateAccount(ctx, api, accountName, key.PublicKey())
+}
+
+// CreateAccountWithRandomNameAndKey ...
+func CreateAccountWithRandomNameAndKey(ctx context.Context, api *eos.API) (eos.AccountName, error) {
+
+	key, _ := ecc.NewRandomPrivateKey()
+	err := api.Signer.ImportPrivateKey(ctx, key.String())
+	if err != nil {
+		return "", fmt.Errorf("Error importing key: %s", err)
+	}
+
+	err = api.Signer.ImportPrivateKey(ctx, key.String())
+	if err != nil {
+		return "", fmt.Errorf("Error importing key: %s", err)
+	}
+
+	return CreateAccount(ctx, api, randAccountName(), key.PublicKey())
 }
 
 // CreateRandoms returns a list of accounts with eosio.code permission attached to active
