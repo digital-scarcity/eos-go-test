@@ -59,44 +59,50 @@ func ErrorCheck(prefix string, err error) {
 func ExecTrx(ctx context.Context, api *eos.API, actions []*eos.Action) (string, error) {
 	txOpts := &eos.TxOptions{}
 	if err := txOpts.FillFromChain(ctx, api); err != nil {
-		log.Printf("Error filling tx opts: %s", err)
-		return "error", err
+		return "error", fmt.Errorf("Error filling tx opts: %s", err)
 	}
 
 	tx := eos.NewTransaction(actions, txOpts)
 
 	_, packedTx, err := api.SignTransaction(ctx, tx, txOpts.ChainID, eos.CompressionNone)
 	if err != nil {
-		log.Printf("Error signing transaction: %s", err)
-		return "error", err
+		return "error", fmt.Errorf("Error signing transaction: %s", err)
 	}
 
 	response, err := api.PushTransaction(ctx, packedTx)
 	if err != nil {
-		log.Printf("Error pushing transaction: %s", err)
-		return "error", err
+		return "error", fmt.Errorf("Error pushing transaction: %s", err)
 	}
 	trxID := hex.EncodeToString(response.Processed.ID)
 	return trxID, nil
 }
 
 // CreateAccountFromString creates an specific account from a string name
-func CreateAccountFromString(ctx context.Context, api *eos.API, accountName string) (eos.AccountName, error) {
+func CreateAccountFromString(ctx context.Context, api *eos.API, accountName, privateKey string) (eos.AccountName, error) {
 	keyBag := api.Signer
-	key, _ := ecc.NewRandomPrivateKey()
+
+	var key *ecc.PrivateKey
+	var err error
+	if privateKey == "" {
+		key, _ := ecc.NewRandomPrivateKey()
+		err = keyBag.ImportPrivateKey(ctx, key.String())
+	} else {
+		key, err = ecc.NewPrivateKey(privateKey)
+		if err != nil {
+			return "", fmt.Errorf("privateKey parameter is not a valid format: %s", err)
+		}
+		err = keyBag.ImportPrivateKey(ctx, privateKey)
+	}
+	if err != nil {
+		return "", fmt.Errorf("Error importing key: %s", err)
+	}
 
 	acct := toAccount(accountName, "account to create")
-
-	err := keyBag.ImportPrivateKey(ctx, key.String())
-	if err != nil {
-		log.Panicf("import private key: %s", err)
-	}
 
 	actions := []*eos.Action{system.NewNewAccount(creator, acct, key.PublicKey())}
 	_, err = ExecTrx(ctx, api, actions)
 	if err != nil {
-		log.Panicf("cannot create random accounts: %s", err)
-		return acct, err
+		return "", fmt.Errorf("Error creating account: %s", err)
 	}
 
 	codePermissionActions := []*eos.Action{system.NewUpdateAuth(acct,
@@ -120,8 +126,7 @@ func CreateAccountFromString(ctx context.Context, api *eos.API, accountName stri
 
 	_, err = ExecTrx(ctx, api, codePermissionActions)
 	if err != nil {
-		log.Panicf("cannot create random accounts: %s", err)
-		return acct, err
+		return "", fmt.Errorf("Error pushing transaction: %s", err)
 	}
 	return acct, nil
 }
@@ -132,7 +137,7 @@ func CreateRandoms(ctx context.Context, api *eos.API, length int) ([]eos.Account
 	accounts := make([]eos.AccountName, length)
 	i := 0
 	for i < length {
-		account, err := CreateAccountFromString(ctx, api, randAccountName())
+		account, err := CreateAccountFromString(ctx, api, randAccountName(), "")
 		if err != nil {
 			log.Panicf("cannot create account: %s", err)
 			return nil, err
