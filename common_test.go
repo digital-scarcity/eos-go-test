@@ -75,9 +75,10 @@ func TestCreateAccountWithRandomKey(t *testing.T) {
 	api.SetSigner(keyBag)
 
 	randomAccountName := randAccountName()
-	account, err := eostest.CreateAccountWithRandomKey(ctx, api, randomAccountName)
+	key, account, err := eostest.CreateAccountWithRandomKey(ctx, api, randomAccountName)
 	assert.NilError(t, err)
 
+	t.Log("New random key: ", key.String())
 	t.Log("Created account: ", randomAccountName, " with random key")
 
 	assert.Equal(t, string(account), randomAccountName)
@@ -91,8 +92,9 @@ func TestCreateAccountWithRandomNameAndKey(t *testing.T) {
 	assert.NilError(t, err)
 	api.SetSigner(keyBag)
 
-	account, err := eostest.CreateAccountWithRandomNameAndKey(ctx, api)
+	key, account, err := eostest.CreateAccountWithRandomNameAndKey(ctx, api)
 	assert.NilError(t, err)
 
+	t.Log("New random key: ", key.String())
 	t.Log("Created account: ", string(account))
 }

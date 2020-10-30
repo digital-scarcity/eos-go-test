@@ -114,15 +114,16 @@ func CreateAccount(ctx context.Context, api *eos.API, accountName string, public
 }
 
 // CreateAccountWithRandomKey specifies a name and uses a random key to create account (adds to Keybag)
-func CreateAccountWithRandomKey(ctx context.Context, api *eos.API, accountName string) (eos.AccountName, error) {
+func CreateAccountWithRandomKey(ctx context.Context, api *eos.API, accountName string) (ecc.PublicKey, eos.AccountName, error) {
 
 	key, _ := ecc.NewRandomPrivateKey()
 	err := api.Signer.ImportPrivateKey(ctx, key.String())
 	if err != nil {
-		return "", fmt.Errorf("Error importing key: %s", err)
+		return ecc.PublicKey{}, "", fmt.Errorf("Error importing key: %s", err)
 	}
 
-	return CreateAccount(ctx, api, accountName, key.PublicKey())
+	acct, err := CreateAccount(ctx, api, accountName, key.PublicKey())
+	return key.PublicKey(), acct, err
 }
 
 // CreateAccountWithRandomName ...
@@ -147,20 +148,9 @@ func CreateAccountFromString(ctx context.Context, api *eos.API, accountName, pri
 }
 
 // CreateAccountWithRandomNameAndKey ...
-func CreateAccountWithRandomNameAndKey(ctx context.Context, api *eos.API) (eos.AccountName, error) {
+func CreateAccountWithRandomNameAndKey(ctx context.Context, api *eos.API) (ecc.PublicKey, eos.AccountName, error) {
 
-	key, _ := ecc.NewRandomPrivateKey()
-	err := api.Signer.ImportPrivateKey(ctx, key.String())
-	if err != nil {
-		return "", fmt.Errorf("Error importing key: %s", err)
-	}
-
-	err = api.Signer.ImportPrivateKey(ctx, key.String())
-	if err != nil {
-		return "", fmt.Errorf("Error importing key: %s", err)
-	}
-
-	return CreateAccount(ctx, api, randAccountName(), key.PublicKey())
+	return CreateAccountWithRandomKey(ctx, api, randAccountName())
 }
 
 // CreateRandoms returns a list of accounts with eosio.code permission attached to active
@@ -169,10 +159,9 @@ func CreateRandoms(ctx context.Context, api *eos.API, length int) ([]eos.Account
 	accounts := make([]eos.AccountName, length)
 	i := 0
 	for i < length {
-		account, err := CreateAccountFromString(ctx, api, randAccountName(), "")
+		_, account, err := CreateAccountWithRandomNameAndKey(ctx, api)
 		if err != nil {
-			log.Panicf("cannot create account: %s", err)
-			return nil, err
+			return []eos.AccountName{}, fmt.Errorf("Error importing key: %s", err)
 		}
 		accounts[i] = account
 		i++
