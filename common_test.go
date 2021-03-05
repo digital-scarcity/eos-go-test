@@ -2,7 +2,6 @@ package eostest_test
 
 import (
 	"context"
-	"math/rand"
 	"testing"
 	"time"
 
@@ -16,10 +15,25 @@ import (
 const testingEndpoint = "http://localhost:8888"
 const defaultKey = "5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3"
 
+var chainResponsePause time.Duration
+
+func setupTestCase(t *testing.T) func(t *testing.T) {
+	t.Log("Bootstrapping testing environment ...")
+
+	cmd, err := eostest.RestartNodeos(true)
+	assert.NilError(t, err)
+
+	chainResponsePause = time.Second
+	t.Log("nodeos PID: ", cmd.Process.Pid)
+
+	return func(t *testing.T) {
+		// any cleanup code would go here
+	}
+}
+
 func TestNewRandomPrivateKey(t *testing.T) {
 	key, err := ecc.NewRandomPrivateKey()
 	require.NoError(t, err)
-	// taken from eosiojs-ecc:common.test.js:12
 	assert.Assert(t, key.String() != "")
 }
 
@@ -34,31 +48,19 @@ func TestK1PrivateToPublic(t *testing.T) {
 	assert.Equal(t, "EOS859gxfnXyUriMgUeThh1fWv3oqcpLFyHa3TfFYC4PK2HqhToVM", pubKeyString)
 }
 
-var seededRand *rand.Rand = rand.New(
-	rand.NewSource(time.Now().UnixNano()))
-
-func stringWithCharset(length int, charset string) string {
-	b := make([]byte, length)
-	for i := range b {
-		b[i] = charset[seededRand.Intn(len(charset))]
-	}
-	return string(b)
-}
-
-const charset = "abcdefghijklmnopqrstuvwxyz" + "12345"
-
-func randAccountName() string {
-	return stringWithCharset(12, charset)
-}
-
 func TestCreateAccountWithKey(t *testing.T) {
+
+	teardownTestCase := setupTestCase(t)
+	defer teardownTestCase(t)
+
 	ctx := context.Background()
 	api := eos.New(testingEndpoint)
 	keyBag := &eos.KeyBag{}
 	api.SetSigner(keyBag)
 	err := keyBag.ImportPrivateKey(ctx, defaultKey)
+	assert.NilError(t, err)
 
-	randomAccountName := randAccountName()
+	randomAccountName := eostest.RandAccountName()
 	account, err := eostest.CreateAccountFromString(ctx, api, randomAccountName, "5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3")
 	assert.NilError(t, err)
 	t.Log("Creating account: ", randomAccountName)
@@ -67,6 +69,10 @@ func TestCreateAccountWithKey(t *testing.T) {
 }
 
 func TestCreateAccountWithRandomKey(t *testing.T) {
+
+	teardownTestCase := setupTestCase(t)
+	defer teardownTestCase(t)
+
 	ctx := context.Background()
 	api := eos.New(testingEndpoint)
 	keyBag := &eos.KeyBag{}
@@ -74,7 +80,7 @@ func TestCreateAccountWithRandomKey(t *testing.T) {
 	assert.NilError(t, err)
 	api.SetSigner(keyBag)
 
-	randomAccountName := randAccountName()
+	randomAccountName := eostest.RandAccountName()
 	key, account, err := eostest.CreateAccountWithRandomKey(ctx, api, randomAccountName)
 	assert.NilError(t, err)
 
@@ -85,6 +91,10 @@ func TestCreateAccountWithRandomKey(t *testing.T) {
 }
 
 func TestCreateAccountWithRandomNameAndKey(t *testing.T) {
+
+	teardownTestCase := setupTestCase(t)
+	defer teardownTestCase(t)
+
 	ctx := context.Background()
 	api := eos.New(testingEndpoint)
 	keyBag := &eos.KeyBag{}

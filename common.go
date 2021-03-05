@@ -7,13 +7,15 @@ import (
 	"log"
 	"math/rand"
 	"os"
+	"os/exec"
 	"testing"
 	"time"
 
 	"github.com/eoscanada/eos-go"
 	"github.com/eoscanada/eos-go/ecc"
 	"github.com/eoscanada/eos-go/system"
-	"github.com/eoscanada/eosc/cli"
+	"github.com/k0kubun/go-ansi"
+	"github.com/schollz/progressbar/v3"
 )
 
 const charset = "abcdefghijklmnopqrstuvwxyz" + "12345"
@@ -30,29 +32,13 @@ func stringWithCharset(length int, charset string) string {
 	return string(b)
 }
 
-func randAccountName() string {
+func RandAccountName() string {
 	return stringWithCharset(12, charset)
-}
-
-func toAccount(in, field string) eos.AccountName {
-	acct, err := cli.ToAccountName(in)
-	ErrorCheck(fmt.Sprintf("invalid account format for %q", field), err)
-
-	return acct
 }
 
 // DefaultKey returns the default EOSIO key
 func DefaultKey() string {
 	return "5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3"
-}
-
-// ErrorCheck - too generic - need to improve this
-// TODO: fix
-func ErrorCheck(prefix string, err error) {
-	if err != nil {
-		fmt.Printf("ERROR: %s: %s\n", prefix, err)
-		os.Exit(1)
-	}
 }
 
 // ExecTrx executes a list of actions
@@ -79,7 +65,7 @@ func ExecTrx(ctx context.Context, api *eos.API, actions []*eos.Action) (string, 
 
 // CreateAccount creates an account and sets the eosio.code permission on active
 func CreateAccount(ctx context.Context, api *eos.API, accountName string, publicKey ecc.PublicKey) (eos.AccountName, error) {
-	acct := toAccount(accountName, "account to create")
+	acct := eos.AN(accountName)
 
 	actions := []*eos.Action{system.NewNewAccount(creator, acct, publicKey)}
 	_, err := ExecTrx(ctx, api, actions)
@@ -128,7 +114,7 @@ func CreateAccountWithRandomKey(ctx context.Context, api *eos.API, accountName s
 
 // CreateAccountWithRandomName ...
 func CreateAccountWithRandomName(ctx context.Context, api *eos.API, key ecc.PublicKey) (eos.AccountName, error) {
-	return CreateAccount(ctx, api, randAccountName(), key)
+	return CreateAccount(ctx, api, RandAccountName(), key)
 }
 
 // CreateAccountFromString creates an specific account from a string name
@@ -150,7 +136,7 @@ func CreateAccountFromString(ctx context.Context, api *eos.API, accountName, pri
 // CreateAccountWithRandomNameAndKey ...
 func CreateAccountWithRandomNameAndKey(ctx context.Context, api *eos.API) (ecc.PublicKey, eos.AccountName, error) {
 
-	return CreateAccountWithRandomKey(ctx, api, randAccountName())
+	return CreateAccountWithRandomKey(ctx, api, RandAccountName())
 }
 
 // CreateRandoms returns a list of accounts with eosio.code permission attached to active
@@ -172,10 +158,14 @@ func CreateRandoms(ctx context.Context, api *eos.API, length int) ([]eos.Account
 // SetContract sets the wasm and abi files to the account
 func SetContract(ctx context.Context, api *eos.API, accountName eos.AccountName, wasmFile, abiFile string) (string, error) {
 	setCodeAction, err := system.NewSetCode(accountName, wasmFile)
-	ErrorCheck("loading wasm file", err)
+	if err != nil {
+		return "", fmt.Errorf("unable construct set_code action: %v", err)
+	}
 
 	setAbiAction, err := system.NewSetABI(accountName, abiFile)
-	ErrorCheck("loading abi file", err)
+	if err != nil {
+		return "", fmt.Errorf("unable construct set_abi action: %v", err)
+	}
 
 	return ExecTrx(ctx, api, []*eos.Action{setCodeAction, setAbiAction})
 }
@@ -192,7 +182,7 @@ func DeployAndCreateToken(ctx context.Context, t *testing.T, api *eos.API, token
 	// TODO: how to save wasm and abi to distribute with package
 	_, err := SetContract(ctx, api, contract, tokenHome+"/token/token.wasm", tokenHome+"/token/token.abi")
 	if err != nil {
-		log.Panicf("cannot set contract: %s", err)
+		return "", fmt.Errorf("cannot set contract: %s", err)
 	}
 
 	actions := []*eos.Action{{
@@ -209,4 +199,75 @@ func DeployAndCreateToken(ctx context.Context, t *testing.T, api *eos.API, token
 
 	t.Log("Created Token : ", contract, " 		: ", maxSupply.String())
 	return ExecTrx(ctx, api, actions)
+}
+
+// Pause will pause execution and print a head
+func Pause(seconds time.Duration, headline, prefix string) {
+	if headline != "" {
+		fmt.Println(headline)
+	}
+
+	bar := DefaultProgressBar(prefix, 100)
+
+	chunk := seconds / 100
+	for i := 0; i < 100; i++ {
+		err := bar.Add(1)
+		if err != nil {
+			log.Printf("cannot increment progress bar: %v", err)
+		}
+
+		time.Sleep(chunk)
+	}
+	fmt.Println()
+	fmt.Println()
+}
+
+func DefaultProgressBar(prefix string, counter int) *progressbar.ProgressBar {
+	return progressbar.NewOptions(counter,
+		progressbar.OptionSetWriter(ansi.NewAnsiStdout()),
+		progressbar.OptionEnableColorCodes(true),
+		progressbar.OptionSetWidth(90),
+		// progressbar.OptionShowIts(),
+		progressbar.OptionSetDescription("[cyan]"+fmt.Sprintf("%20v", prefix)),
+		progressbar.OptionSetTheme(progressbar.Theme{
+			Saucer:        "[green]=[reset]",
+			SaucerHead:    "[green]>[reset]",
+			SaucerPadding: " ",
+			BarStart:      "[",
+			BarEnd:        "]",
+		}))
+}
+
+func RestartNodeos(useDefault bool, arg ...string) (*exec.Cmd, error) {
+
+	// cancel nodeos if it is running
+	_, err := exec.Command("sh", "-c", "pkill -SIGINT nodeos").Output()
+	if err == nil {
+		Pause(time.Second, "Killing nodeos ...", "")
+	}
+
+	var cmd *exec.Cmd
+	// start nodeos with some reasonable defaults
+	if useDefault {
+		cmd = exec.Command("nodeos", "-e", "-p", "eosio",
+			"--plugin", "eosio::producer_plugin",
+			"--plugin", "eosio::producer_api_plugin",
+			"--plugin", "eosio::chain_api_plugin",
+			"--plugin", "eosio::http_plugin",
+			"--access-control-allow-origin", "*",
+			"--contracts-console",
+			"--http-validate-host", "false",
+			"--verbose-http-errors",
+			"--delete-all-blocks")
+	} else {
+		cmd = exec.Command("nodeos", arg...)
+	}
+	cmd.Stdout = os.Stdout
+	err = cmd.Start()
+	if err != nil {
+		return nil, err
+	}
+
+	Pause(500*time.Millisecond, "", "")
+	return cmd, nil
 }
