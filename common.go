@@ -8,6 +8,7 @@ import (
 	"math/rand"
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 	"time"
 
@@ -41,23 +42,39 @@ func DefaultKey() string {
 	return "5KQwrPbwdL6PhXujxW37FSSQZ1JiwsST4cqQzDeyXtP79zkvFD3"
 }
 
+func ExecWithRetry(ctx context.Context, api *eos.API, actions []*eos.Action) (string, error) {
+	trxId, err := ExecTrx(ctx, api, actions)
+	if err != nil && strings.Contains(err.Error(), "deadline exceeded") {
+		attempts := 1
+		for attempts < 3 {
+			trxId, err = ExecTrx(ctx, api, actions)
+			if err == nil {
+				return trxId, nil
+			}
+			attempts++
+		}
+		return string(""), err
+	}
+	return trxId, nil
+}
+
 // ExecTrx executes a list of actions
 func ExecTrx(ctx context.Context, api *eos.API, actions []*eos.Action) (string, error) {
 	txOpts := &eos.TxOptions{}
 	if err := txOpts.FillFromChain(ctx, api); err != nil {
-		return "error", fmt.Errorf("Error filling tx opts: %s", err)
+		return "error", fmt.Errorf("error filling tx opts: %s", err)
 	}
 
 	tx := eos.NewTransaction(actions, txOpts)
 
 	_, packedTx, err := api.SignTransaction(ctx, tx, txOpts.ChainID, eos.CompressionNone)
 	if err != nil {
-		return "error", fmt.Errorf("Error signing transaction: %s", err)
+		return "error", fmt.Errorf("error signing transaction: %s", err)
 	}
 
 	response, err := api.PushTransaction(ctx, packedTx)
 	if err != nil {
-		return "error", fmt.Errorf("Error pushing transaction: %s", err)
+		return "error", fmt.Errorf("error pushing transaction: %s", err)
 	}
 	trxID := hex.EncodeToString(response.Processed.ID)
 	return trxID, nil
@@ -70,7 +87,7 @@ func CreateAccount(ctx context.Context, api *eos.API, accountName string, public
 	actions := []*eos.Action{system.NewNewAccount(creator, acct, publicKey)}
 	_, err := ExecTrx(ctx, api, actions)
 	if err != nil {
-		return eos.AccountName(""), fmt.Errorf("Error filling tx opts: %s", err)
+		return eos.AccountName(""), fmt.Errorf("error filling tx opts: %s", err)
 	}
 
 	codePermissionActions := []*eos.Action{system.NewUpdateAuth(acct,
@@ -94,7 +111,7 @@ func CreateAccount(ctx context.Context, api *eos.API, accountName string, public
 
 	_, err = ExecTrx(ctx, api, codePermissionActions)
 	if err != nil {
-		return "", fmt.Errorf("Error filling tx opts: %s", err)
+		return "", fmt.Errorf("error filling tx opts: %s", err)
 	}
 	return acct, nil
 }
@@ -105,7 +122,7 @@ func CreateAccountWithRandomKey(ctx context.Context, api *eos.API, accountName s
 	key, _ := ecc.NewRandomPrivateKey()
 	err := api.Signer.ImportPrivateKey(ctx, key.String())
 	if err != nil {
-		return ecc.PublicKey{}, "", fmt.Errorf("Error importing key: %s", err)
+		return ecc.PublicKey{}, "", fmt.Errorf("error importing key: %s", err)
 	}
 
 	acct, err := CreateAccount(ctx, api, accountName, key.PublicKey())
@@ -127,7 +144,7 @@ func CreateAccountFromString(ctx context.Context, api *eos.API, accountName, pri
 
 	err = api.Signer.ImportPrivateKey(ctx, privateKey)
 	if err != nil {
-		return "", fmt.Errorf("Error importing key: %s", err)
+		return "", fmt.Errorf("error importing key: %s", err)
 	}
 
 	return CreateAccount(ctx, api, accountName, key.PublicKey())
@@ -147,7 +164,7 @@ func CreateRandoms(ctx context.Context, api *eos.API, length int) ([]eos.Account
 	for i < length {
 		_, account, err := CreateAccountWithRandomNameAndKey(ctx, api)
 		if err != nil {
-			return []eos.AccountName{}, fmt.Errorf("Error importing key: %s", err)
+			return []eos.AccountName{}, fmt.Errorf("error importing key: %s", err)
 		}
 		accounts[i] = account
 		i++
@@ -262,7 +279,16 @@ func RestartNodeos(useDefault bool, arg ...string) (*exec.Cmd, error) {
 	} else {
 		cmd = exec.Command("nodeos", arg...)
 	}
-	cmd.Stdout = os.Stdout
+
+	outfile, err := os.Create("./nodeos-go.log")
+	if err != nil {
+		return nil, fmt.Errorf("unable to create nodeos-go.log file: %v", err)
+	}
+
+	defer outfile.Close()
+	cmd.Stdout = outfile
+	cmd.Stderr = outfile
+
 	err = cmd.Start()
 	if err != nil {
 		return nil, err
