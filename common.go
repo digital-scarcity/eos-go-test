@@ -44,14 +44,19 @@ func DefaultKey() string {
 
 func ExecWithRetry(ctx context.Context, api *eos.API, actions []*eos.Action) (string, error) {
 	trxId, err := ExecTrx(ctx, api, actions)
-	if err != nil && strings.Contains(err.Error(), "deadline exceeded") {
-		attempts := 1
-		for attempts < 3 {
-			trxId, err = ExecTrx(ctx, api, actions)
-			if err == nil {
-				return trxId, nil
+
+	if err != nil {
+		if !strings.Contains(err.Error(), "deadline exceeded") {
+			return string(""), err
+		} else {
+			attempts := 1
+			for attempts < 3 {
+				trxId, err = ExecTrx(ctx, api, actions)
+				if err == nil {
+					return trxId, nil
+				}
+				attempts++
 			}
-			attempts++
 		}
 		return string(""), err
 	}
