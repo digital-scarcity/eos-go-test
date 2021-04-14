@@ -22,8 +22,56 @@ import (
 const charset = "abcdefghijklmnopqrstuvwxyz" + "12345"
 const creator = "eosio"
 
+type ProgressBarInterface interface {
+	Add(int) error
+	Clear() error
+	RenderBlank() error
+	Reset()
+	Finish() error
+	Set(int) error
+	IsFinished() bool
+}
+
+type FakeProgressBar struct {
+}
+
+func (r *FakeProgressBar) Add(int) error {
+    return nil
+}
+
+func (r *FakeProgressBar) Clear() error {
+    return nil
+}
+
+func (r *FakeProgressBar) RenderBlank() error {
+    return nil
+}
+
+func (r *FakeProgressBar) Reset()  {
+}
+
+func (r *FakeProgressBar) Finish() error {
+    return nil
+}
+
+func (r *FakeProgressBar) Set(int) error {
+    return nil
+}
+
+func (r *FakeProgressBar) IsFinished() bool {
+    return true
+}
+
+func (r *FakeProgressBar) render() error {
+    return nil
+}
+
 var seededRand *rand.Rand = rand.New(
 	rand.NewSource(time.Now().UnixNano()))
+
+func IsCI() bool {
+	return os.Getenv("CI") != ""
+}
 
 func stringWithCharset(length int, charset string) string {
 	b := make([]byte, length)
@@ -244,7 +292,12 @@ func Pause(seconds time.Duration, headline, prefix string) {
 	fmt.Println()
 }
 
-func DefaultProgressBar(prefix string, counter int) *progressbar.ProgressBar {
+func DefaultProgressBar(prefix string, counter int) ProgressBarInterface {
+
+	if (IsCI()) {
+		return &FakeProgressBar{}
+	}
+
 	return progressbar.NewOptions(counter,
 		progressbar.OptionSetWriter(ansi.NewAnsiStdout()),
 		progressbar.OptionEnableColorCodes(true),

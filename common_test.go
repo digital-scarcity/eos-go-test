@@ -2,6 +2,8 @@ package eostest_test
 
 import (
 	"context"
+	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -107,4 +109,24 @@ func TestCreateAccountWithRandomNameAndKey(t *testing.T) {
 
 	t.Log("New random key: ", key.String())
 	t.Log("Created account: ", string(account))
+}
+
+func TestDefaultProgressBarCreatesAFakeProgressBarInCI(t *testing.T) {
+	prevCI := os.Getenv("CI")
+	os.Setenv("CI", "true")
+
+	bar := eostest.DefaultProgressBar("foo", 10)
+
+	os.Setenv("CI", prevCI)
+	assert.Equal(t, reflect.TypeOf(bar).String(), "*eostest.FakeProgressBar")
+}
+
+func TestDefaultProgressBarDoesNotCreatesAFakeProgressBarOutsideOfCI(t *testing.T) {
+	prevCI := os.Getenv("CI")
+	os.Setenv("CI", "")
+
+	bar := eostest.DefaultProgressBar("foo", 10)
+
+	os.Setenv("CI", prevCI)
+	assert.Assert(t, reflect.TypeOf(bar).String() != "*eostest.FakeProgressBar")
 }
