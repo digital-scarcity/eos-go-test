@@ -2,6 +2,7 @@ package eostest_test
 
 import (
 	"context"
+	"strconv"
 	"testing"
 	"time"
 
@@ -107,4 +108,25 @@ func TestCreateAccountWithRandomNameAndKey(t *testing.T) {
 
 	t.Log("New random key: ", key.String())
 	t.Log("Created account: ", string(account))
+}
+
+func TestCreateManyRandomAccounts(t *testing.T) {
+
+	teardownTestCase := setupTestCase(t)
+	defer teardownTestCase(t)
+
+	ctx := context.Background()
+	api := eos.New(testingEndpoint)
+	keyBag := &eos.KeyBag{}
+	err := keyBag.ImportPrivateKey(ctx, defaultKey)
+	assert.NilError(t, err)
+	api.SetSigner(keyBag)
+
+	accountCount := 100
+	accounts, err := eostest.CreateRandoms(ctx, api, accountCount)
+	assert.NilError(t, err)
+
+	for i, account := range accounts {
+		t.Log("Created account: " + strconv.Itoa(i) + " of " + strconv.Itoa(accountCount) + ": " + string(account))
+	}
 }
