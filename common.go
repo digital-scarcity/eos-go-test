@@ -69,8 +69,8 @@ func (r *FakeProgressBar) render() error {
 var seededRand *rand.Rand = rand.New(
 	rand.NewSource(time.Now().UnixNano()))
 
-func IsCI() bool {
-	return os.Getenv("CI") != ""
+func IsInteractive() bool {
+	return os.Getenv("INTERACTIVE_MODE") != "false"
 }
 
 func stringWithCharset(length int, charset string) string {
@@ -274,7 +274,11 @@ func DeployAndCreateToken(ctx context.Context, t *testing.T, api *eos.API, token
 // Pause will pause execution and print a head
 func Pause(seconds time.Duration, headline, prefix string) {
 	if headline != "" {
-		fmt.Println(headline)
+		if (!IsInteractive()) {
+			fmt.Printf("Pausing for %v: %v", seconds, headline)
+		} else {
+			fmt.Println(headline)
+		}
 	}
 
 	bar := DefaultProgressBar(prefix, 100)
@@ -294,7 +298,7 @@ func Pause(seconds time.Duration, headline, prefix string) {
 
 func DefaultProgressBar(prefix string, counter int) ProgressBarInterface {
 
-	if (IsCI()) {
+	if (!IsInteractive()) {
 		return &FakeProgressBar{}
 	}
 

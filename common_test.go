@@ -111,22 +111,22 @@ func TestCreateAccountWithRandomNameAndKey(t *testing.T) {
 	t.Log("Created account: ", string(account))
 }
 
-func TestDefaultProgressBarCreatesAFakeProgressBarInCI(t *testing.T) {
-	prevCI := os.Getenv("CI")
-	os.Setenv("CI", "true")
+func TestDefaultProgressBarInteractiveModeFalse(t *testing.T) {
+	prevInteactive := os.Getenv("INTERACTIVE_MODE")
+	os.Setenv("INTERACTIVE_MODE", "false")
 
 	bar := eostest.DefaultProgressBar("foo", 10)
 
-	os.Setenv("CI", prevCI)
+	os.Setenv("INTERACTIVE_MODE", prevInteactive)
 	assert.Equal(t, reflect.TypeOf(bar).String(), "*eostest.FakeProgressBar")
 }
 
-func TestDefaultProgressBarDoesNotCreatesAFakeProgressBarOutsideOfCI(t *testing.T) {
-	prevCI := os.Getenv("CI")
-	os.Setenv("CI", "")
+func TestDefaultProgressBarInteractiveMode(t *testing.T) {
+	prevInteactive := os.Getenv("INTERACTIVE_MODE")
+	os.Setenv("INTERACTIVE_MODE", "")
 
 	bar := eostest.DefaultProgressBar("foo", 10)
 
-	os.Setenv("CI", prevCI)
+	os.Setenv("INTERACTIVE_MODE", prevInteactive)
 	assert.Assert(t, reflect.TypeOf(bar).String() != "*eostest.FakeProgressBar")
 }
