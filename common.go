@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -12,11 +11,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dfuse-io/logging"
 	"github.com/eoscanada/eos-go"
 	"github.com/eoscanada/eos-go/ecc"
 	"github.com/eoscanada/eos-go/system"
 	"github.com/k0kubun/go-ansi"
 	"github.com/schollz/progressbar/v3"
+
+	"go.uber.org/zap"
 )
 
 const charset = "abcdefghijklmnopqrstuvwxyz" + "12345"
@@ -30,6 +32,12 @@ type ProgressBarInterface interface {
 	Finish() error
 	Set(int) error
 	IsFinished() bool
+}
+
+var zlog *zap.Logger
+
+func init() {
+	logging.Register("github.com/digital-scarcity/eos-go-test", &zlog)
 }
 
 type FakeProgressBar struct {
@@ -274,11 +282,7 @@ func DeployAndCreateToken(ctx context.Context, t *testing.T, api *eos.API, token
 // Pause will pause execution and print a head
 func Pause(seconds time.Duration, headline, prefix string) {
 	if headline != "" {
-		if (!IsInteractive()) {
-			fmt.Printf("Pausing for %v: %v", seconds, headline)
-		} else {
-			fmt.Println(headline)
-		}
+		zlog.Info("Pausing for",  zap.Duration("duration", seconds), zap.String("headline", headline))
 	}
 
 	bar := DefaultProgressBar(prefix, 100)
@@ -287,13 +291,11 @@ func Pause(seconds time.Duration, headline, prefix string) {
 	for i := 0; i < 100; i++ {
 		err := bar.Add(1)
 		if err != nil {
-			log.Printf("cannot increment progress bar: %v", err)
+			zlog.Error("Cannot increment progress bar", zap.Error(err))
 		}
 
 		time.Sleep(chunk)
 	}
-	fmt.Println()
-	fmt.Println()
 }
 
 func DefaultProgressBar(prefix string, counter int) ProgressBarInterface {
