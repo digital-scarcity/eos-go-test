@@ -2,6 +2,8 @@ package eostest_test
 
 import (
 	"context"
+	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -107,4 +109,24 @@ func TestCreateAccountWithRandomNameAndKey(t *testing.T) {
 
 	t.Log("New random key: ", key.String())
 	t.Log("Created account: ", string(account))
+}
+
+func TestDefaultProgressBarInteractiveModeFalse(t *testing.T) {
+	prevInteactive := os.Getenv("INTERACTIVE_MODE")
+	os.Setenv("INTERACTIVE_MODE", "false")
+
+	bar := eostest.DefaultProgressBar("foo", 10)
+
+	os.Setenv("INTERACTIVE_MODE", prevInteactive)
+	assert.Equal(t, reflect.TypeOf(bar).String(), "*eostest.FakeProgressBar")
+}
+
+func TestDefaultProgressBarInteractiveMode(t *testing.T) {
+	prevInteactive := os.Getenv("INTERACTIVE_MODE")
+	os.Setenv("INTERACTIVE_MODE", "")
+
+	bar := eostest.DefaultProgressBar("foo", 10)
+
+	os.Setenv("INTERACTIVE_MODE", prevInteactive)
+	assert.Assert(t, reflect.TypeOf(bar).String() != "*eostest.FakeProgressBar")
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/hex"
 	"fmt"
-	"log"
 	"math/rand"
 	"os"
 	"os/exec"
@@ -12,18 +11,75 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dfuse-io/logging"
 	"github.com/eoscanada/eos-go"
 	"github.com/eoscanada/eos-go/ecc"
 	"github.com/eoscanada/eos-go/system"
 	"github.com/k0kubun/go-ansi"
 	"github.com/schollz/progressbar/v3"
+
+	"go.uber.org/zap"
 )
 
 const charset = "abcdefghijklmnopqrstuvwxyz" + "12345"
 const creator = "eosio"
 
+type ProgressBarInterface interface {
+	Add(int) error
+	Clear() error
+	RenderBlank() error
+	Reset()
+	Finish() error
+	Set(int) error
+	IsFinished() bool
+}
+
+var zlog *zap.Logger
+
+func init() {
+	logging.Register("github.com/digital-scarcity/eos-go-test", &zlog)
+}
+
+type FakeProgressBar struct {
+}
+
+func (r *FakeProgressBar) Add(int) error {
+    return nil
+}
+
+func (r *FakeProgressBar) Clear() error {
+    return nil
+}
+
+func (r *FakeProgressBar) RenderBlank() error {
+    return nil
+}
+
+func (r *FakeProgressBar) Reset()  {
+}
+
+func (r *FakeProgressBar) Finish() error {
+    return nil
+}
+
+func (r *FakeProgressBar) Set(int) error {
+    return nil
+}
+
+func (r *FakeProgressBar) IsFinished() bool {
+    return true
+}
+
+func (r *FakeProgressBar) render() error {
+    return nil
+}
+
 var seededRand *rand.Rand = rand.New(
 	rand.NewSource(time.Now().UnixNano()))
+
+func IsInteractive() bool {
+	return os.Getenv("INTERACTIVE_MODE") != "false"
+}
 
 func stringWithCharset(length int, charset string) string {
 	b := make([]byte, length)
@@ -226,7 +282,7 @@ func DeployAndCreateToken(ctx context.Context, t *testing.T, api *eos.API, token
 // Pause will pause execution and print a head
 func Pause(seconds time.Duration, headline, prefix string) {
 	if headline != "" {
-		fmt.Println(headline)
+		zlog.Info("Pausing for",  zap.Duration("duration", seconds), zap.String("headline", headline))
 	}
 
 	bar := DefaultProgressBar(prefix, 100)
@@ -235,16 +291,19 @@ func Pause(seconds time.Duration, headline, prefix string) {
 	for i := 0; i < 100; i++ {
 		err := bar.Add(1)
 		if err != nil {
-			log.Printf("cannot increment progress bar: %v", err)
+			zlog.Error("Cannot increment progress bar", zap.Error(err))
 		}
 
 		time.Sleep(chunk)
 	}
-	fmt.Println()
-	fmt.Println()
 }
 
-func DefaultProgressBar(prefix string, counter int) *progressbar.ProgressBar {
+func DefaultProgressBar(prefix string, counter int) ProgressBarInterface {
+
+	if (!IsInteractive()) {
+		return &FakeProgressBar{}
+	}
+
 	return progressbar.NewOptions(counter,
 		progressbar.OptionSetWriter(ansi.NewAnsiStdout()),
 		progressbar.OptionEnableColorCodes(true),
