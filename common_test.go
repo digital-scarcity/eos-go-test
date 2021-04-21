@@ -3,6 +3,8 @@ package eostest_test
 import (
 	"context"
 	"strconv"
+	"os"
+	"reflect"
 	"testing"
 	"time"
 
@@ -129,4 +131,24 @@ func TestCreateManyRandomAccounts(t *testing.T) {
 	for i, account := range accounts {
 		t.Log("Created account: " + strconv.Itoa(i) + " of " + strconv.Itoa(accountCount) + ": " + string(account))
 	}
+}
+
+func TestDefaultProgressBarInteractiveModeFalse(t *testing.T) {
+	prevInteactive := os.Getenv("INTERACTIVE_MODE")
+	os.Setenv("INTERACTIVE_MODE", "false")
+
+	bar := eostest.DefaultProgressBar("foo", 10)
+
+	os.Setenv("INTERACTIVE_MODE", prevInteactive)
+	assert.Equal(t, reflect.TypeOf(bar).String(), "*eostest.FakeProgressBar")
+}
+
+func TestDefaultProgressBarInteractiveMode(t *testing.T) {
+	prevInteactive := os.Getenv("INTERACTIVE_MODE")
+	os.Setenv("INTERACTIVE_MODE", "")
+
+	bar := eostest.DefaultProgressBar("foo", 10)
+
+	os.Setenv("INTERACTIVE_MODE", prevInteactive)
+	assert.Assert(t, reflect.TypeOf(bar).String() != "*eostest.FakeProgressBar")
 }
