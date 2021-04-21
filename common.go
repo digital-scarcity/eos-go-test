@@ -44,34 +44,34 @@ type FakeProgressBar struct {
 }
 
 func (r *FakeProgressBar) Add(int) error {
-    return nil
+	return nil
 }
 
 func (r *FakeProgressBar) Clear() error {
-    return nil
+	return nil
 }
 
 func (r *FakeProgressBar) RenderBlank() error {
-    return nil
+	return nil
 }
 
-func (r *FakeProgressBar) Reset()  {
+func (r *FakeProgressBar) Reset() {
 }
 
 func (r *FakeProgressBar) Finish() error {
-    return nil
+	return nil
 }
 
 func (r *FakeProgressBar) Set(int) error {
-    return nil
+	return nil
 }
 
 func (r *FakeProgressBar) IsFinished() bool {
-    return true
+	return true
 }
 
 func (r *FakeProgressBar) render() error {
-    return nil
+	return nil
 }
 
 var seededRand *rand.Rand = rand.New(
@@ -218,6 +218,22 @@ func CreateAccountWithRandomNameAndKey(ctx context.Context, api *eos.API) (ecc.P
 }
 
 // CreateRandoms returns a list of accounts with eosio.code permission attached to active
+func CreateRandomAccountsDefaultKey(ctx context.Context, api *eos.API, length int) ([]eos.AccountName, error) {
+
+	accounts := make([]eos.AccountName, length)
+	i := 0
+	for i < length {
+		account, err := CreateAccountFromString(ctx, api, RandAccountName(), DefaultKey())
+		if err != nil {
+			return []eos.AccountName{}, fmt.Errorf("cannot create accounts: %s", err)
+		}
+		accounts[i] = account
+		i++
+	}
+	return accounts, nil
+}
+
+// CreateRandoms returns a list of accounts with eosio.code permission attached to active
 func CreateRandoms(ctx context.Context, api *eos.API, length int) ([]eos.AccountName, error) {
 
 	accounts := make([]eos.AccountName, length)
@@ -282,7 +298,7 @@ func DeployAndCreateToken(ctx context.Context, t *testing.T, api *eos.API, token
 // Pause will pause execution and print a head
 func Pause(seconds time.Duration, headline, prefix string) {
 	if headline != "" {
-		zlog.Info("Pausing for",  zap.Duration("duration", seconds), zap.String("headline", headline))
+		zlog.Info("Pausing for", zap.Duration("duration", seconds), zap.String("headline", headline))
 	}
 
 	bar := DefaultProgressBar(prefix, 100)
@@ -300,7 +316,7 @@ func Pause(seconds time.Duration, headline, prefix string) {
 
 func DefaultProgressBar(prefix string, counter int) ProgressBarInterface {
 
-	if (!IsInteractive()) {
+	if !IsInteractive() {
 		return &FakeProgressBar{}
 	}
 
