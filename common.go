@@ -102,11 +102,11 @@ func ExecWithRetry(ctx context.Context, api *eos.API, actions []*eos.Action) (st
 	trxId, err := ExecTrx(ctx, api, actions)
 
 	if err != nil {
-		if !strings.Contains(err.Error(), "deadline exceeded") {
+		if !isRetryableError(err) {
 			return string(""), err
 		} else {
 			attempts := 1
-			for attempts < 3 {
+			for attempts < 5 {
 				trxId, err = ExecTrx(ctx, api, actions)
 				if err == nil {
 					return trxId, nil
@@ -117,6 +117,17 @@ func ExecWithRetry(ctx context.Context, api *eos.API, actions []*eos.Action) (st
 		return string(""), err
 	}
 	return trxId, nil
+}
+
+func isRetryableError(err error) bool {
+	errMsg := err.Error()
+	// fmt.Println("Error: ", errMsg)
+	return strings.Contains(errMsg, "deadline exceeded") ||
+		strings.Contains(errMsg, "connection reset by peer") ||
+		strings.Contains(errMsg, "Transaction took too long") ||
+		strings.Contains(errMsg, "exceeded the current CPU usage limit") ||
+		strings.Contains(errMsg, "ABI serialization time has exceeded")
+
 }
 
 // ExecTrx executes a list of actions
