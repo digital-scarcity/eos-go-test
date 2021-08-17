@@ -141,7 +141,7 @@ func Trx(ctx context.Context, api *eos.API, actions []*eos.Action, retries int) 
 	response, err := ExecTrx(ctx, api, actions)
 	if err != nil {
 		if retries > 0 {
-			fmt.Println("Attempt: ", retries)
+			// fmt.Println("Attempt: ", retries)
 			if isRetryableError(err) {
 				time.Sleep(time.Duration(retrySleep) * time.Second)
 				return Trx(ctx, api, actions, retries-1)
