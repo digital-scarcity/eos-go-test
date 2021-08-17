@@ -23,6 +23,8 @@ import (
 
 const charset = "abcdefghijklmnopqrstuvwxyz" + "12345"
 const creator = "eosio"
+const retries = 10
+const retrySleep = 2
 
 type ProgressBarInterface interface {
 	Add(int) error
@@ -99,24 +101,7 @@ func DefaultKey() string {
 }
 
 func ExecWithRetry(ctx context.Context, api *eos.API, actions []*eos.Action) (string, error) {
-	trxId, err := ExecTrx(ctx, api, actions)
-
-	if err != nil {
-		if !isRetryableError(err) {
-			return string(""), err
-		} else {
-			attempts := 1
-			for attempts < 5 {
-				trxId, err = ExecTrx(ctx, api, actions)
-				if err == nil {
-					return trxId, nil
-				}
-				attempts++
-			}
-		}
-		return string(""), err
-	}
-	return trxId, nil
+	return Trx(ctx, api, actions, retries)
 }
 
 func isRetryableError(err error) bool {
@@ -150,6 +135,21 @@ func ExecTrx(ctx context.Context, api *eos.API, actions []*eos.Action) (string, 
 	}
 	trxID := hex.EncodeToString(response.Processed.ID)
 	return trxID, nil
+}
+
+func Trx(ctx context.Context, api *eos.API, actions []*eos.Action, retries int) (string, error) {
+	response, err := ExecTrx(ctx, api, actions)
+	if err != nil {
+		if retries > 0 {
+			fmt.Println("Attempt: ", retries)
+			if isRetryableError(err) {
+				time.Sleep(time.Duration(retrySleep) * time.Second)
+				return Trx(ctx, api, actions, retries-1)
+			}
+		}
+		return "", err
+	}
+	return response, nil
 }
 
 // CreateAccount creates an account and sets the eosio.code permission on active
