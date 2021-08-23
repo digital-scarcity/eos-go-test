@@ -23,6 +23,8 @@ import (
 
 const charset = "abcdefghijklmnopqrstuvwxyz" + "12345"
 const creator = "eosio"
+const retries = 10
+const retrySleep = 2
 
 type ProgressBarInterface interface {
 	Add(int) error
@@ -99,24 +101,18 @@ func DefaultKey() string {
 }
 
 func ExecWithRetry(ctx context.Context, api *eos.API, actions []*eos.Action) (string, error) {
-	trxId, err := ExecTrx(ctx, api, actions)
+	return Trx(ctx, api, actions, retries)
+}
 
-	if err != nil {
-		if !strings.Contains(err.Error(), "deadline exceeded") {
-			return string(""), err
-		} else {
-			attempts := 1
-			for attempts < 3 {
-				trxId, err = ExecTrx(ctx, api, actions)
-				if err == nil {
-					return trxId, nil
-				}
-				attempts++
-			}
-		}
-		return string(""), err
-	}
-	return trxId, nil
+func isRetryableError(err error) bool {
+	errMsg := err.Error()
+	// fmt.Println("Error: ", errMsg)
+	return strings.Contains(errMsg, "deadline exceeded") ||
+		strings.Contains(errMsg, "connection reset by peer") ||
+		strings.Contains(errMsg, "Transaction took too long") ||
+		strings.Contains(errMsg, "exceeded the current CPU usage limit") ||
+		strings.Contains(errMsg, "ABI serialization time has exceeded")
+
 }
 
 // ExecTrx executes a list of actions
@@ -139,6 +135,21 @@ func ExecTrx(ctx context.Context, api *eos.API, actions []*eos.Action) (string, 
 	}
 	trxID := hex.EncodeToString(response.Processed.ID)
 	return trxID, nil
+}
+
+func Trx(ctx context.Context, api *eos.API, actions []*eos.Action, retries int) (string, error) {
+	response, err := ExecTrx(ctx, api, actions)
+	if err != nil {
+		if retries > 0 {
+			// fmt.Println("Attempt: ", retries)
+			if isRetryableError(err) {
+				time.Sleep(time.Duration(retrySleep) * time.Second)
+				return Trx(ctx, api, actions, retries-1)
+			}
+		}
+		return "", err
+	}
+	return response, nil
 }
 
 // CreateAccount creates an account and sets the eosio.code permission on active
