@@ -36,6 +36,7 @@ type ProgressBarInterface interface {
 	IsFinished() bool
 }
 
+var cmd *exec.Cmd = nil
 var zlog *zap.Logger
 
 func init() {
@@ -107,7 +108,7 @@ func ExecWithRetry(ctx context.Context, api *eos.API, actions []*eos.Action) (st
 func isRetryableError(err error) bool {
 	errMsg := err.Error()
 	// fmt.Println("Error: ", errMsg)
-	return strings.Contains(errMsg, "deadline exceeded") ||
+	return strings.Contains(errMsg, "deadline") ||
 		strings.Contains(errMsg, "connection reset by peer") ||
 		strings.Contains(errMsg, "Transaction took too long") ||
 		strings.Contains(errMsg, "exceeded the current CPU usage limit") ||
@@ -209,17 +210,36 @@ func CreateAccountWithRandomName(ctx context.Context, api *eos.API, key ecc.Publ
 // CreateAccountFromString creates an specific account from a string name
 func CreateAccountFromString(ctx context.Context, api *eos.API, accountName, privateKey string) (eos.AccountName, error) {
 
+	key, err := ImportKey(ctx, api, privateKey)
+	if err != nil {
+		return "", err
+	}
+
+	return CreateAccount(ctx, api, accountName, key.PublicKey())
+}
+
+func ImportKey(ctx context.Context, api *eos.API, privateKey string) (*ecc.PrivateKey, error) {
+
 	key, err := ecc.NewPrivateKey(privateKey)
 	if err != nil {
-		return "", fmt.Errorf("privateKey parameter is not a valid format: %s", err)
+		return nil, fmt.Errorf("privateKey parameter is not a valid format: %s", err)
+	}
+
+	keys, err := api.Signer.AvailableKeys(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("error getting available key: %s", err)
+	}
+	for _, k := range keys {
+		if k.String() == key.PublicKey().String() {
+			return key, nil
+		}
 	}
 
 	err = api.Signer.ImportPrivateKey(ctx, privateKey)
 	if err != nil {
-		return "", fmt.Errorf("error importing key: %s", err)
+		return nil, fmt.Errorf("error importing key: %s", err)
 	}
-
-	return CreateAccount(ctx, api, accountName, key.PublicKey())
+	return key, nil
 }
 
 // CreateAccountWithRandomNameAndKey ...
@@ -272,7 +292,15 @@ func SetContract(ctx context.Context, api *eos.API, accountName eos.AccountName,
 		return "", fmt.Errorf("unable construct set_abi action: %v", err)
 	}
 
-	return ExecTrx(ctx, api, []*eos.Action{setCodeAction, setAbiAction})
+	resp, err := Trx(ctx, api, []*eos.Action{setCodeAction, setAbiAction}, 3)
+	if err != nil {
+		errMsg := err.Error()
+		// fmt.Println("Error: ", errMsg)
+		if !strings.Contains(errMsg, "Contract is already running this version of code") {
+			return "", err
+		}
+	}
+	return resp, nil
 }
 
 type tokenCreate struct {
@@ -347,14 +375,29 @@ func DefaultProgressBar(prefix string, counter int) ProgressBarInterface {
 }
 
 func RestartNodeos(useDefault bool, arg ...string) (*exec.Cmd, error) {
+	if cmd != nil {
+		err := cmd.Process.Signal(os.Interrupt)
+		if err != nil {
+			fmt.Println("error killing process, err:", err)
+		}
+		procState, err := cmd.Process.Wait()
+		if err != nil {
+			fmt.Println("error waiting process, err:", err)
+		}
 
-	// cancel nodeos if it is running
-	_, err := exec.Command("sh", "-c", "pkill -SIGINT nodeos").Output()
-	if err == nil {
-		Pause(time.Second, "Killing nodeos ...", "")
+		if !procState.Exited() {
+			// panic(fmt.Sprintf("Nodeos process, failed to exit correctly, exit code: %v", procState.ExitCode()))
+			panic("Nodeos process did not exit")
+		}
+		// time.Sleep(time.Second * 2)
+	} else {
+		// cancel nodeos if it is running
+		_, err := exec.Command("sh", "-c", "pkill -SIGINT nodeos").Output()
+		if err == nil {
+			Pause(time.Second, "Killing nodeos ...", "")
+		}
 	}
 
-	var cmd *exec.Cmd
 	// start nodeos with some reasonable defaults
 	if useDefault {
 		cmd = exec.Command("nodeos", "-e", "-p", "eosio",
@@ -371,20 +414,20 @@ func RestartNodeos(useDefault bool, arg ...string) (*exec.Cmd, error) {
 		cmd = exec.Command("nodeos", arg...)
 	}
 
-	outfile, err := os.Create("./nodeos-go.log")
-	if err != nil {
-		return nil, fmt.Errorf("unable to create nodeos-go.log file: %v", err)
-	}
+	// outfile, err := os.Create("./nodeos-go.log")
+	// if err != nil {
+	// 	return nil, fmt.Errorf("unable to create nodeos-go.log file: %v", err)
+	// }
 
-	defer outfile.Close()
-	cmd.Stdout = outfile
-	cmd.Stderr = outfile
+	// defer outfile.Close()
+	// cmd.Stdout = outfile
+	// cmd.Stderr = outfile
 
-	err = cmd.Start()
+	err := cmd.Start()
 	if err != nil {
 		return nil, err
 	}
 
-	Pause(500*time.Millisecond, "", "")
+	Pause(time.Second, "", "")
 	return cmd, nil
 }
