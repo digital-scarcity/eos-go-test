@@ -2,15 +2,15 @@ package eostest_test
 
 import (
 	"context"
-	"strconv"
 	"os"
 	"reflect"
+	"strconv"
 	"testing"
 	"time"
 
 	eostest "github.com/digital-scarcity/eos-go-test"
-	"github.com/eoscanada/eos-go"
-	"github.com/eoscanada/eos-go/ecc"
+	"github.com/sebastianmontero/eos-go"
+	"github.com/sebastianmontero/eos-go/ecc"
 	"github.com/stretchr/testify/require"
 	"gotest.tools/assert"
 )

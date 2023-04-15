@@ -12,11 +12,11 @@ import (
 	"time"
 
 	"github.com/dfuse-io/logging"
-	"github.com/eoscanada/eos-go"
-	"github.com/eoscanada/eos-go/ecc"
-	"github.com/eoscanada/eos-go/system"
 	"github.com/k0kubun/go-ansi"
 	"github.com/schollz/progressbar/v3"
+	"github.com/sebastianmontero/eos-go"
+	"github.com/sebastianmontero/eos-go/ecc"
+	"github.com/sebastianmontero/eos-go/system"
 
 	"go.uber.org/zap"
 )
