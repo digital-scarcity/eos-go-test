@@ -287,12 +287,21 @@ func SetContract(ctx context.Context, api *eos.API, accountName eos.AccountName,
 		return "", fmt.Errorf("unable construct set_code action: %v", err)
 	}
 
+	_, err = Trx(ctx, api, []*eos.Action{setCodeAction}, 3)
+	if err != nil {
+		errMsg := err.Error()
+		// fmt.Println("Error: ", errMsg)
+		if !strings.Contains(errMsg, "Contract is already running this version of code") {
+			return "", err
+		}
+	}
+
 	setAbiAction, err := system.NewSetABI(accountName, abiFile)
 	if err != nil {
 		return "", fmt.Errorf("unable construct set_abi action: %v", err)
 	}
 
-	resp, err := Trx(ctx, api, []*eos.Action{setCodeAction, setAbiAction}, 3)
+	resp, err := Trx(ctx, api, []*eos.Action{setAbiAction}, 3)
 	if err != nil {
 		errMsg := err.Error()
 		// fmt.Println("Error: ", errMsg)
