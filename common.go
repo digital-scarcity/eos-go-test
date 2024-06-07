@@ -389,16 +389,11 @@ func RestartNodeos(useDefault bool, arg ...string) (*exec.Cmd, error) {
 		if err != nil {
 			fmt.Println("error killing process, err:", err)
 		}
-		procState, err := cmd.Process.Wait()
+		_, err = cmd.Process.Wait()
 		if err != nil {
 			fmt.Println("error waiting process, err:", err)
 		}
 
-		if !procState.Exited() {
-			// panic(fmt.Sprintf("Nodeos process, failed to exit correctly, exit code: %v", procState.ExitCode()))
-			panic("Nodeos process did not exit")
-		}
-		// time.Sleep(time.Second * 2)
 	} else {
 		// cancel nodeos if it is running
 		_, err := exec.Command("sh", "-c", "pkill -SIGINT nodeos").Output()
